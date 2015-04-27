@@ -1,0 +1,122 @@
+#!/usr/bin/python
+
+import sys
+import optparse
+import logdevd
+import signal
+import json
+
+#-----------------------------------------------------------------------------
+# command line options {{{
+
+parser = optparse.OptionParser(
+    usage = "%prog [options]"
+)
+
+parser.add_option(
+    "-c", "--config", dest = "config",
+    default = "/etc/logdevourer/logdevourer.conf",
+    help = "configuration file", metavar = "FILE",
+)
+parser.add_option(
+    "-s", "--state-dir", dest = "state_dir",
+    default = "/var/lib/logdevourer",
+    help = "PID file for going daemon", metavar = "FILE",
+)
+parser.add_option(
+    "-p", "--pid-file", dest = "pid_file", default = None,
+    help = "PID file for going daemon", metavar = "FILE",
+)
+parser.add_option(
+    "-d", "--daemon", dest = "daemonize",
+    action = "store_true", default = False,
+    help = "detach from terminal (run as a daemon)",
+)
+parser.add_option(
+    "-u", "--user", dest = "user", default = None,
+    help = "user to run as",
+)
+parser.add_option(
+    "-g", "--group", dest = "group", default = None,
+    help = "group to run as",
+)
+
+(options, args) = parser.parse_args()
+
+# }}}
+#-----------------------------------------------------------------------------
+
+class Daemon:
+    def __init__(self, config, state_dir):
+        self.config = config
+        self.state_dir = state_dir
+        self.poll_h = None
+        self.sources = None
+        self.destinations = None
+        self.lognorm = None
+        # TODO: raise exception on error (no previous config to fall back to)
+        self.reload()
+
+    def reload(self):
+        # TODO: try-catch
+        cfg = logdevd.config.load(self.config, self.state_dir)
+        # TODO: convergence
+        (self.sources, self.destinations, self.lognorm) = cfg
+        self.poll_h = logdevd.poll.Poll(self.sources)
+
+    def normalize(self, log_line):
+        return self.lognorm.normalize(log_line)
+
+    def fan_out(self, message):
+        line = json.dumps(message, sort_keys = True)
+        for d in self.destinations:
+            d.send(line)
+
+    def poll(self, timeout):
+        return self.poll_h.poll(timeout)
+
+    def sighandler(self, signum, stack_frame):
+        self.reload()
+
+daemon = Daemon(options.config, options.state_dir)
+
+signal.signal(signal.SIGHUP, daemon.sighandler)
+
+#-----------------------------------------------------------------------------
+# daemonization {{{
+
+pid_file = logdevd.daemonize.PidFile(options.pid_file) # None is OK
+
+logdevd.daemonize.setguid(options.user, options.group)
+
+if options.daemonize:
+    result = logdevd.daemonize.detach("/")
+    if result == logdevd.daemonize.PARENT:
+        sys.exit(0)
+    # else: result == logdevd.daemonize.CHILD
+    # errors result in an exception
+    pid_file.update()
+
+# set remove-on-close flag
+pid_file.claim()
+
+# }}}
+#-----------------------------------------------------------------------------
+
+try:
+    while True:
+        canread = daemon.poll(200)
+        for f in canread:
+            for line in f.try_readlines():
+                message = daemon.normalize(line)
+                # TODO: what to do on write error? (save position and so on)
+                daemon.fan_out(message)
+        # TODO: try adding missing sources (file didn't exist, socket was
+        # in use etc.)
+        for f in daemon.sources:
+            f.reopen_if_necessary()
+except KeyboardInterrupt:
+    pass
+
+#-----------------------------------------------------------------------------
+# vim:ft=python:foldmethod=marker

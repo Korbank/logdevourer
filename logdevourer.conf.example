@@ -1,0 +1,13 @@
+sources:
+  - /var/log/daemon.log
+  - {proto: udp, host: localhost, port: 1639}
+  - {proto: unix, path: /var/run/logdevourer.sock}
+
+destinations:
+  - {proto: tcp, host: localhost, port: 1638}
+  - {proto: udp, host: localhost, port: 1638}
+  - {proto: unix, path: /var/run/messenger.sock}
+
+rulebase: /etc/logdevourer/rulebase/init.rules
+
+# vim:ft=yaml

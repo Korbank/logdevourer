@@ -10,5 +10,6 @@ setup(
     package_dir  = { "": "pylib" },
     install_requires = [
         "liblognorm",
+        "yaml",
     ],
 )
