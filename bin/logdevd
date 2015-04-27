@@ -123,7 +123,6 @@ try:
         for source in canread:
             for line in source.try_readlines():
                 message = daemon.normalize(line)
-                # TODO: what to do on write error? (save position and so on)
                 daemon.fan_out(message)
         daemon.reopen_sources_if_necessary()
 except KeyboardInterrupt:
