@@ -35,7 +35,8 @@ def load(config_file, state_dir):
         elif dest["proto"] == "udp":
             new_dest = destinations.UDPDestination(dest["host"], int(dest["port"]))
         elif dest["proto"] == "unix":
-            new_dest = destinations.UNIXDestination(dest["path"])
+            retry = dest.get("retry", True)
+            new_dest = destinations.UNIXDestination(dest["path"], retry)
         else:
             raise ValueError("unrecognized destination: %s" % (str(dest)))
         cf_destinations.append(new_dest)

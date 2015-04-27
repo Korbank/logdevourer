@@ -78,16 +78,26 @@ class UDPDestination:
 #-----------------------------------------------------------------------------
 
 class UNIXDestination:
-    def __init__(self, path):
+    def __init__(self, path, retry = True):
         self.path = path
+        self.retry = retry # whether to ignore send errors
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
 
     def send(self, line):
-        # XXX: ignore send errors
-        try:
-            self.sock.sendto(line, self.path)
-        except socket.error:
-            pass
+        def _try_send(line):
+            try:
+                self.sock.sendto(line, self.path)
+                return True
+            except socket.error:
+                return False
+
+        if not self.retry:
+            # ignore send errors
+            _try_send(line)
+        else:
+            # retry until succeeded
+            while not _try_send(line):
+                time.sleep(0.1)
 
 #-----------------------------------------------------------------------------
 # vim:ft=python

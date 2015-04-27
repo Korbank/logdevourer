@@ -6,7 +6,8 @@ sources:
 destinations:
   - {proto: tcp, host: localhost, port: 1638}
   - {proto: udp, host: localhost, port: 1638}
-  - {proto: unix, path: /var/run/messenger.sock}
+  # retry=true is the default, only path is required
+  - {proto: unix, path: /var/run/messenger.sock, retry: true}
 
 rulebase: /etc/logdevourer/rulebase/init.rules
 
