@@ -8,14 +8,20 @@ import sha
 #-----------------------------------------------------------------------------
 
 class Source(object):
+    def open(self):
+        raise NotImplementedError()
+
+    def reopen(self):
+        raise NotImplementedError()
+
+    def reopen_necessary(self):
+        return False
+
     def fileno(self):
         raise NotImplementedError()
 
     def try_readlines(self):
         raise NotImplementedError()
-
-    def reopen_if_necessary(self):
-        pass
 
 #-----------------------------------------------------------------------------
 
@@ -48,38 +54,77 @@ class FileSource(Source):
         def update(self, dev, inode, pos):
             self.fh.seek(0)
             self.fh.write("0x%08x 0x%08x %d\n" % (dev, inode, pos))
+            self.fh.truncate()
             self.fh.flush()
+
+        def truncate(self):
+            self.fh.seek(0)
+            self.fh.truncate()
 
     # }}}
     #------------------------------------------------------
 
     def __init__(self, filename, state_dir):
         self.filename = filename
-        self.fh = open(self.filename)
+        self.fh = None
+        self.dev = None
+        self.inode = None
+        self.read_buffer = None
 
         self.state_dir = state_dir
         position_filename = "%s.pos" % (sha.sha(self.filename).hexdigest(),)
         position_filename = os.path.join(self.state_dir, position_filename)
         self.position_file = FileSource.PositionFile(position_filename)
 
+    def __del__(self):
+        if self.fh is not None:
+            self._write_position()
+
+    def open(self):
+        try:
+            self.fh = open(self.filename)
+        except (IOError, OSError):
+            return
         (self.dev, self.inode) = FileSource.stat(fh = self.fh)
-
-        self.read_buffer = None
-
         self._rewind()
 
-    def __del__(self):
+    def reopen(self):
+        # TODO: read until the EOF?
+        self.fh.close()
+        self.fh = None
+        self.dev = None
+        self.inode = None
+        # NOTE: non-empty read_buffer from previous file causes wrong file
+        # position to be written to state file
+        self.read_buffer = None # TODO: or save it somewhere?
+        try:
+            self.fh = open(self.filename)
+        except (IOError, OSError):
+            return
+        (self.dev, self.inode) = FileSource.stat(fh = self.fh)
         self._write_position()
 
+    def reopen_necessary(self):
+        # TODO: account the file size (if it shrinked somehow)
+        new_stat = FileSource.stat(path = self.filename)
+        if new_stat == (None, None):
+            # file has been removed
+            self._file_removed()
+        return new_stat == (None, None) or new_stat != (self.dev, self.inode)
+
     def fileno(self):
+        if self.fh is None:
+            return None
         return self.fh.fileno()
 
     def try_readlines(self):
+        if self.fh is None:
+            return
         while True:
             line = self.fh.readline()
             if line.endswith("\n"):
-                line = line.rstrip("\n")
                 # proper line with EOL marker
+                line = line.rstrip("\n")
                 if self.read_buffer is not None:
                     yield self.read_buffer + line
                     self.read_buffer = None
@@ -96,17 +141,6 @@ class FileSource(Source):
                 # EOF, no partial line read
                 break
 
-    def reopen_if_necessary(self):
-        new_fh = open(self.filename)
-        new_fh_stat = FileSource.stat(fh = new_fh)
-        if (self.dev, self.inode) != new_fh_stat:
-            # TODO: read until the EOF?
-            self.fh.close()
-            self.read_buffer = None # TODO: or save it somewhere?
-            self.fh = new_fh
-            (self.dev, self.inode) = new_fh_stat
-            self._write_position()
-
     #------------------------------------------------------
     # stuff around the position in logfile {{{
 
@@ -116,6 +150,11 @@ class FileSource(Source):
             self.fh.seek(pos)
         else:
             self._write_position()
+
+    def _file_removed(self):
+        self.dev = None
+        self.inode = None
+        self.position_file.truncate()
 
     def _write_position(self):
         if self.read_buffer is None:
@@ -131,7 +170,11 @@ class FileSource(Source):
     @staticmethod
     def stat(path = None, fh = None):
         if path is not None:
-            stat = os.stat(path)
+            # only this stat() can fail
+            try:
+                stat = os.stat(path)
+            except (IOError, OSError):
+                return (None, None)
         elif fh is not None:
             stat = os.fstat(fh.fileno())
         return (stat.st_dev, stat.st_ino)
@@ -145,13 +188,23 @@ class UDPSource(Source):
         else:
             self.host = host
         self.port = port
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind((self.host, self.port))
+        self.socket = None
+
+    def open(self):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.bind((self.host, self.port))
+            self.socket = sock
+        except (IOError, OSError):
+            pass
 
     def __del__(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
 
     def fileno(self):
+        if self.socket is None:
+            return None
         return self.socket.fileno()
 
     def try_readlines(self):
@@ -167,20 +220,28 @@ class UDPSource(Source):
 
 #-----------------------------------------------------------------------------
 
+# TODO: implement reopen_necessary() and reopen()
 class UNIXSource(Source):
     def __init__(self, path):
         self.path = path
         self.socket = None
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        sock.bind(self.path)
-        self.socket = sock
 
     def __del__(self):
         if self.socket is not None:
             self.socket.close()
             os.unlink(self.path)
 
+    def open(self):
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            sock.bind(self.path)
+            self.socket = sock
+        except (IOError, OSError):
+            pass
+
     def fileno(self):
+        if self.socket is None:
+            return None
         return self.socket.fileno()
 
     def try_readlines(self):

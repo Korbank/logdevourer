@@ -62,7 +62,20 @@ class Daemon:
         cfg = logdevd.config.load(self.config, self.state_dir)
         # TODO: convergence
         (self.sources, self.destinations, self.lognorm) = cfg
-        self.poll_h = logdevd.poll.Poll(self.sources)
+        self.poll_h = logdevd.poll.Poll()
+        self.reopen_sources_if_necessary()
+
+    def reopen_sources_if_necessary(self):
+        for source in self.sources:
+            if source not in self.poll_h:
+                # add missing files
+                source.open()
+                self.poll_h.add(source)
+            elif source.reopen_necessary():
+                # reopen files that need it
+                self.poll_h.remove(source)
+                source.reopen()
+                self.poll_h.add(source)
 
     def normalize(self, log_line):
         return self.lognorm.normalize(log_line)
@@ -105,16 +118,14 @@ pid_file.claim()
 
 try:
     while True:
-        canread = daemon.poll(200)
-        for f in canread:
-            for line in f.try_readlines():
+        # check every 250ms for sources that need reopening
+        canread = daemon.poll(250)
+        for source in canread:
+            for line in source.try_readlines():
                 message = daemon.normalize(line)
                 # TODO: what to do on write error? (save position and so on)
                 daemon.fan_out(message)
-        # TODO: try adding missing sources (file didn't exist, socket was
-        # in use etc.)
-        for f in daemon.sources:
-            f.reopen_if_necessary()
+        daemon.reopen_sources_if_necessary()
 except KeyboardInterrupt:
     pass
 

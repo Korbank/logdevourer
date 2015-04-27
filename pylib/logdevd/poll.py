@@ -48,6 +48,15 @@ class Poll:
         del self._object_map[handle.fileno()]
         self._poll.unregister(handle)
 
+    def __contains__(self, handle):
+        '''
+        :param handle: file handle, the same as for :meth:`add`
+
+        Check if the handle is in poll list.
+        '''
+        return (handle.fileno() is not None) and \
+               (handle.fileno() in self._object_map)
+
     def poll(self, timeout = 100):
         '''
         :param timeout: timeout in milliseconds for *poll* operation
