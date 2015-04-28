@@ -41,9 +41,9 @@ def load(config_file, state_dir):
             raise ValueError("unrecognized destination: %s" % (str(dest)))
         cf_destinations.append(new_dest)
 
-    lognorm = liblognorm.Lognorm(configuration["rulebase"])
+    lognorm = liblognorm.Lognorm(configuration["options"]["rulebase"])
 
-    return (cf_sources, cf_destinations, lognorm)
+    return (cf_sources, cf_destinations, lognorm, configuration)
 
 #-----------------------------------------------------------------------------
 # vim:ft=python

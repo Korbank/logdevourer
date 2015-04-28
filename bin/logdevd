@@ -49,6 +49,8 @@ parser.add_option(
 class Daemon:
     def __init__(self, config, state_dir):
         self.config = config
+        self.log_unparsed = False
+        self.send_unparsed = True
         self.state_dir = state_dir
         self.poll_h = None
         self.sources = None
@@ -61,9 +63,11 @@ class Daemon:
         # TODO: try-catch
         cfg = logdevd.config.load(self.config, self.state_dir)
         # TODO: convergence
-        (self.sources, self.destinations, self.lognorm) = cfg
+        (self.sources, self.destinations, self.lognorm, config) = cfg
         self.poll_h = logdevd.poll.Poll()
         self.reopen_sources_if_necessary()
+        self.send_unparsed = config["options"].get("send_unparsed", True)
+        self.log_unparsed  = config["options"].get("log_unparsed", False)
 
     def reopen_sources_if_necessary(self):
         for source in self.sources:
@@ -85,6 +89,10 @@ class Daemon:
             try:
                 result.update(json.loads(result.pop("*")))
             except:
+                return None
+        # remains after parsing the log line
+        if "originalmsg" in result and "unparsed-data" in result:
+            if not self.send_unparsed:
                 return None
         return result
 

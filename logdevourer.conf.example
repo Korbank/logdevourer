@@ -9,6 +9,9 @@ destinations:
   # retry=true is the default, only path is required
   - {proto: unix, path: /var/run/messenger.sock, retry: true}
 
-rulebase: /etc/logdevourer/rulebase/init.rules
+options:
+  rulebase: /etc/logdevourer/rulebase/init.rules
+  send_unparsed: true
+  log_unparsed: false
 
 # vim:ft=yaml
