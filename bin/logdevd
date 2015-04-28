@@ -53,13 +53,17 @@ class Daemon:
         self.send_unparsed = True
         self.state_dir = state_dir
         self.poll_h = None
-        self.sources = None
-        self.destinations = None
+        self.sources = []
+        self.destinations = []
         self.lognorm = None
         # TODO: raise exception on error (no previous config to fall back to)
         self.reload()
 
     def reload(self):
+        # before replacing sources, inform those that they might want to flush
+        # their (buffered) state to disk
+        for source in self.sources:
+            source.flush()
         # TODO: try-catch
         cfg = logdevd.config.load(self.config, self.state_dir)
         # TODO: convergence

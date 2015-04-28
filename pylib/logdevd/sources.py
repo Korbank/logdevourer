@@ -17,6 +17,9 @@ class Source(object):
     def reopen_necessary(self):
         return False
 
+    def flush(self):
+        pass
+
     def fileno(self):
         raise NotImplementedError()
 
@@ -117,6 +120,9 @@ class FileSource(Source):
             self._file_removed()
             return True
         return (dev, inode) != (self.dev, self.inode)
+
+    def flush(self):
+        self._write_position()
 
     def fileno(self):
         if self.fh is None:
