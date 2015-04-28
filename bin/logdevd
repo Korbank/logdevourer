@@ -78,7 +78,15 @@ class Daemon:
                 self.poll_h.add(source)
 
     def normalize(self, log_line):
-        return self.lognorm.normalize(log_line)
+        result = self.lognorm.normalize(log_line)
+        # XXX: "*" field is expected to be JSON string, since liblognorm 1.1.1
+        # doesn't have "json" field type yet
+        if "*" in result:
+            try:
+                result.update(json.loads(result.pop("*")))
+            except:
+                return None
+        return result
 
     def fan_out(self, message):
         line = json.dumps(message, sort_keys = True)
@@ -123,7 +131,8 @@ try:
         for source in canread:
             for line in source.try_readlines():
                 message = daemon.normalize(line)
-                daemon.fan_out(message)
+                if message is not None:
+                    daemon.fan_out(message)
         daemon.reopen_sources_if_necessary()
 except KeyboardInterrupt:
     pass
