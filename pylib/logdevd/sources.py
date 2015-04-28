@@ -39,13 +39,20 @@ class FileSource(Source):
         def read(self):
             self.fh.seek(0)
             stat_line = self.fh.readline()
-            if stat_line != '':
-                # TODO: catch errors
-                (dev, inode, pos) = stat_line.split()
-                dev   = int(dev, 0)   # hex number
-                inode = int(inode, 0) # hex number
-                pos   = int(pos)      # dec number
+            if stat_line != '' and stat_line.endswith("\n"):
+                # full line was read
+                try:
+                    (dev, inode, pos) = stat_line.split()
+                    dev   = int(dev, 0)   # hex number
+                    inode = int(inode, 0) # hex number
+                    pos   = int(pos)      # dec number
+                except ValueError:
+                    # either unpack failed or one of the int() failed
+                    dev   = None
+                    inode = None
+                    pos   = None
             else:
+                # partial line or EOF means damaged status file
                 dev   = None
                 inode = None
                 pos   = None
