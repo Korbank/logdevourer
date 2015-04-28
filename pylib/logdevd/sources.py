@@ -92,7 +92,6 @@ class FileSource(Source):
             self.fh = open(self.filename)
         except (IOError, OSError):
             return
-        (self.dev, self.inode) = FileSource.stat(fh = self.fh)
         self._rewind()
 
     def reopen(self):
@@ -108,16 +107,16 @@ class FileSource(Source):
             self.fh = open(self.filename)
         except (IOError, OSError):
             return
-        (self.dev, self.inode) = FileSource.stat(fh = self.fh)
+        (self.dev, self.inode, _size) = FileSource.stat(fh = self.fh)
         self._write_position()
 
     def reopen_necessary(self):
-        # TODO: account the file size (if it shrinked somehow)
-        new_stat = FileSource.stat(path = self.filename)
-        if new_stat == (None, None):
-            # file has been removed
+        (dev, inode, size) = FileSource.stat(path = self.filename)
+        if (dev, inode) == (None, None) or size < self.fh.tell():
+            # file has been removed (or truncated)
             self._file_removed()
-        return new_stat == (None, None) or new_stat != (self.dev, self.inode)
+            return True
+        return (dev, inode) != (self.dev, self.inode)
 
     def fileno(self):
         if self.fh is None:
@@ -152,10 +151,14 @@ class FileSource(Source):
     # stuff around the position in logfile {{{
 
     def _rewind(self):
+        (self.dev, self.inode, size) = FileSource.stat(fh = self.fh)
         (dev, inode, pos) = self.position_file.read()
-        if (self.dev, self.inode) == (dev, inode):
+        if (self.dev, self.inode) == (dev, inode) and pos <= size:
             self.fh.seek(pos)
         else:
+            # either the position file is for other (possibly removed) logfile
+            # or the logfile shrinked, meaning it was truncated or even
+            # removed and recreated
             self._write_position()
 
     def _file_removed(self):
@@ -184,7 +187,7 @@ class FileSource(Source):
                 return (None, None)
         elif fh is not None:
             stat = os.fstat(fh.fileno())
-        return (stat.st_dev, stat.st_ino)
+        return (stat.st_dev, stat.st_ino, stat.st_size)
 
 #-----------------------------------------------------------------------------
 
