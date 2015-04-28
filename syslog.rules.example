@@ -1,0 +1,31 @@
+prefix=%date:date-rfc3164% %host:word%\x20
+
+rule=tftpd:in.tftpd[%pid:number%]: %message:rest%
+
+rule=streamproxyng:streamproxyng[%pid:number%]: %json:rest%
+
+rule=dhcp,boot:dhcpd: 
+rule=dhcp,boot:dhcpd: binding to user-specified port %-:number%
+rule=dhcp,boot:dhcpd: Wrote %-:number% deleted host decls to leases file.
+rule=dhcp,boot:dhcpd: Wrote %-:number% new dynamic host decls to leases file.
+rule=dhcp,boot:dhcpd: Wrote %-:number% leases to leases file.
+
+rule=dhcp,discover:dhcpd: DHCPDISCOVER from %mac:word% via %iface:word%
+rule=dhcp,offer:dhcpd: DHCPOFFER on %address:ipv4% to %mac:word% via %iface:word%
+rule=dhcp,request:dhcpd: DHCPREQUEST for %address:ipv4% from %mac:word% via %iface:word%
+rule=dhcp,request:dhcpd: DHCPREQUEST for %address:ipv4% (%server_address:ipv4%) from %mac:word% via %iface:word%
+rule=dhcp,ack:dhcpd: DHCPACK on %address:ipv4% to %mac:word% via %iface:word%
+rule=dhcp,discover:dhcpd: DHCPDISCOVER from %mac:word% via %iface:char-to:\x3a%: network %network_name:char-to:\x3a%: no free leases
+rule=dhcp,packets_dropped:dhcpd: %too_long_count:number% udp packets in %total_count:number% too long - dropped
+
+rule=snmpd:snmpd[%pid:number%]: looks like a 64bit wrap, but prev!=new
+
+rule=irqbalance:/usr/sbin/irqbalance: %message:rest%
+
+annotate=snmpd:+program="snmpd"
+annotate=dhcp:+program="dhcpd"
+annotate=streamproxyng:+program="streamproxy-ng"
+annotate=irqbalance:+program="irqbalance"
+annotate=tftpd:+program="in.tftpd"
+
+# vim:ft=conf

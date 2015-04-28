@@ -10,7 +10,7 @@ destinations:
   - {proto: unix, path: /var/run/messenger.sock, retry: true}
 
 options:
-  rulebase: /etc/logdevourer/rulebase/init.rules
+  rulebase: /etc/logdevourer/syslog.rules
   send_unparsed: true
   log_unparsed: false
 
