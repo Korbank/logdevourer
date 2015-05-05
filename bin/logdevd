@@ -109,11 +109,16 @@ class Daemon:
         return self.poll_h.poll(timeout)
 
     def sighandler(self, signum, stack_frame):
-        self.reload()
+        if signum == signal.SIGHUP:
+            self.reload()
+        elif signum == signal.SIGTERM:
+            sys.exit()
+        # else ignore
 
 daemon = Daemon(options.config, options.state_dir)
 
 signal.signal(signal.SIGHUP, daemon.sighandler)
+signal.signal(signal.SIGTERM, daemon.sighandler)
 
 #-----------------------------------------------------------------------------
 # daemonization {{{
