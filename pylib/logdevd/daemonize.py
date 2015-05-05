@@ -145,6 +145,8 @@ def child_process():
     # replace STDIN, STDOUT and STDERR
     sys.stdin = open('/dev/null')
     sys.stdout = sys.stderr = open('/dev/null', 'w')
+    # detach from controlling terminal
+    os.setsid()
 
 def parent_process():
     '''
