@@ -143,8 +143,13 @@ def child_process():
     operations, like creating listening sockets. See :func:`detach_succeeded`.
     '''
     # replace STDIN, STDOUT and STDERR
-    sys.stdin = open('/dev/null')
-    sys.stdout = sys.stderr = open('/dev/null', 'w')
+    new_stdin_fd = os.open('/dev/null', os.O_RDONLY)
+    new_stdout_fd = os.open('/dev/null', os.O_WRONLY)
+    os.dup2(new_stdin_fd, 0)
+    os.dup2(new_stdout_fd, 1)
+    os.dup2(new_stdout_fd, 2)
+    os.close(new_stdin_fd)
+    os.close(new_stdout_fd)
     # detach from controlling terminal
     os.setsid()
 
