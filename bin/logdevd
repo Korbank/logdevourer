@@ -45,6 +45,7 @@ parser.add_option(
 
 # }}}
 #-----------------------------------------------------------------------------
+# main loop, along with state variables and options {{{
 
 class Daemon:
     def __init__(self, config, state_dir):
@@ -111,13 +112,17 @@ class Daemon:
     def sighandler(self, signum, stack_frame):
         if signum == signal.SIGHUP:
             self.reload()
-        elif signum == signal.SIGTERM:
+        elif signum == signal.SIGTERM or signum == signal.SIGINT:
             sys.exit()
         # else ignore
+
+# }}}
+#-----------------------------------------------------------------------------
 
 daemon = Daemon(options.config, options.state_dir)
 
 signal.signal(signal.SIGHUP, daemon.sighandler)
+signal.signal(signal.SIGINT, daemon.sighandler)
 signal.signal(signal.SIGTERM, daemon.sighandler)
 
 #-----------------------------------------------------------------------------
@@ -141,18 +146,15 @@ pid_file.claim()
 # }}}
 #-----------------------------------------------------------------------------
 
-try:
-    while True:
-        # check every 250ms for sources that need reopening
-        canread = daemon.poll(250)
-        for source in canread:
-            for line in source.try_readlines():
-                message = daemon.normalize(line)
-                if message is not None:
-                    daemon.fan_out(message)
-        daemon.reopen_sources_if_necessary()
-except KeyboardInterrupt:
-    pass
+while True:
+    # check every 250ms for sources that need reopening
+    canread = daemon.poll(250)
+    for source in canread:
+        for line in source.try_readlines():
+            message = daemon.normalize(line)
+            if message is not None:
+                daemon.fan_out(message)
+    daemon.reopen_sources_if_necessary()
 
 #-----------------------------------------------------------------------------
 # vim:ft=python:foldmethod=marker
