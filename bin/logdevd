@@ -5,6 +5,8 @@ import optparse
 import logdevd
 import signal
 import json
+import logging
+import yaml
 
 #-----------------------------------------------------------------------------
 # command line options {{{
@@ -16,6 +18,11 @@ parser = optparse.OptionParser(
 parser.add_option(
     "-c", "--config", dest = "config",
     default = "/etc/logdevourer/logdevourer.conf",
+    help = "configuration file", metavar = "FILE",
+)
+parser.add_option(
+    "-l", "--logging", dest = "logging_config",
+    default = None,
     help = "configuration file", metavar = "FILE",
 )
 parser.add_option(
@@ -45,6 +52,42 @@ parser.add_option(
 
 # }}}
 #-----------------------------------------------------------------------------
+# configure logging {{{
+
+if options.logging_config is not None:
+    with open(options.logging_config) as cf:
+        logging_config = yaml.safe_load(cf)
+else:
+    logging_config = {
+        "version": 1,
+        "root": {
+            "level": "NOTSET",
+            "handlers": ["syslog"],
+        },
+        "formatters": {
+            "syslog_formatter": {
+                "format": "logdevd[%(process)d]: [%(name)s] %(message)s",
+            },
+        },
+        "handlers": {
+            "syslog": {
+                "class": "logging.handlers.SysLogHandler",
+                "formatter": "syslog_formatter",
+                "address": "/dev/log",
+                "facility": "syslog",
+            },
+        },
+    }
+
+try:
+    from logging.config import dictConfig
+except ImportError:
+    # Python 2.6
+    from logdevd.logging_config import dictConfig
+dictConfig(logging_config)
+
+# }}}
+#-----------------------------------------------------------------------------
 # main loop, along with state variables and options {{{
 
 class Daemon:
@@ -61,11 +104,15 @@ class Daemon:
         self.reload()
 
     def reload(self):
+        logger = logging.getLogger("configuration")
         # before replacing sources, inform those that they might want to flush
         # their (buffered) state to disk
+        if len(self.sources) > 0:
+            logger.info("flushing buffers in all sources")
         for source in self.sources:
             source.flush()
         # TODO: try-catch
+        logger.info("loading config file %s", self.config)
         cfg = logdevd.config.load(self.config, self.state_dir)
         # TODO: convergence
         (self.sources, self.destinations, self.lognorm, config) = cfg
@@ -75,16 +122,24 @@ class Daemon:
         self.log_unparsed  = config["options"].get("log_unparsed", False)
 
     def reopen_sources_if_necessary(self):
+        # XXX: when logging, remember that this method is called every 500ms,
+        # so if adding the source has not succeeded (e.g. file is still
+        # missing), it would spam logfile with meaningless entries
+        logger = logging.getLogger("sources")
         for source in self.sources:
             if source not in self.poll_h:
-                # add missing files
+                # add missing log sources
                 source.open()
-                self.poll_h.add(source)
+                if self.poll_h.add(source):
+                    logger.info("added source %s", source)
             elif source.reopen_necessary():
                 # reopen files that need it
                 self.poll_h.remove(source)
                 source.reopen()
-                self.poll_h.add(source)
+                if self.poll_h.add(source):
+                    logger.info("reopened source %s", source)
+                else:
+                    logger.info("closed source %s", source)
 
     def normalize(self, log_line):
         result = self.lognorm.normalize(log_line)
@@ -97,6 +152,8 @@ class Daemon:
                 return None
         # remains after parsing the log line
         if "originalmsg" in result and "unparsed-data" in result:
+            if self.log_unparsed:
+                logger.info("unparsed log entry: %s", json.dumps(result))
             if not self.send_unparsed:
                 return None
         return result
@@ -110,15 +167,22 @@ class Daemon:
         return self.poll_h.poll(timeout)
 
     def sighandler(self, signum, stack_frame):
+        logger = logging.getLogger("signal")
         if signum == signal.SIGHUP:
+            logger.info("received SIGHUP")
             self.reload()
         elif signum == signal.SIGTERM or signum == signal.SIGINT:
+            logger.info("received signal; terminating")
             sys.exit()
-        # else ignore
+        else:
+            logger.info("received signal %d; ignoring", signum)
 
 # }}}
 #-----------------------------------------------------------------------------
 
+logger = logging.getLogger()
+
+logger.info("preparing daemon's state")
 daemon = Daemon(options.config, options.state_dir)
 
 signal.signal(signal.SIGHUP, daemon.sighandler)
@@ -136,6 +200,7 @@ if options.daemonize:
     result = logdevd.daemonize.detach("/")
     if result == logdevd.daemonize.PARENT:
         sys.exit(0)
+    logger.info("detached from terminal")
     # else: result == logdevd.daemonize.CHILD
     # errors result in an exception
     pid_file.update()
@@ -146,6 +211,7 @@ pid_file.claim()
 # }}}
 #-----------------------------------------------------------------------------
 
+logger.info("entering read-parse-send loop")
 while True:
     # check every 250ms for sources that need reopening
     canread = daemon.poll(250)

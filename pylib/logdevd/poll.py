@@ -20,19 +20,22 @@ class Poll:
         '''
         :param handle: file handle (e.g. :obj:`file` object, but anything with
           :meth:`fileno` method)
+        :return: ``True`` if the handle was added to poll list, ``False``
+          otherwise (either handle is not pollable or was already in poll list)
 
         Add a handle to poll list. If ``handle.fileno()`` returns ``None``,
         the handle is not added. The same stands for objects that already were
         added (check is based on file descriptor).
         '''
         if handle.fileno() is None:
-            return
+            return False
         if handle.fileno() in self._object_map:
-            return
+            return False
 
         # remember for later
         self._object_map[handle.fileno()] = handle
         self._poll.register(handle, select.POLLIN)
+        return True
 
     def remove(self, handle):
         '''

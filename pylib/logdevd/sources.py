@@ -153,6 +153,9 @@ class FileSource(Source):
                 # EOF, no partial line read
                 break
 
+    def __str__(self):
+        return "file: %s" % (self.filename,)
+
     #------------------------------------------------------
     # stuff around the position in logfile {{{
 
@@ -234,6 +237,13 @@ class UDPSource(Source):
                 return
             raise e
 
+    def __str__(self):
+        if self.host == "":
+            host = "*"
+        else:
+            host = self.host
+        return "UDP: %s:%d" % (host, self.port)
+
 #-----------------------------------------------------------------------------
 
 # TODO: implement reopen_necessary() and reopen()
@@ -270,6 +280,9 @@ class UNIXSource(Source):
                 # this is expected when there's nothing in the socket queue
                 return
             raise e
+
+    def __str__(self):
+        return "UNIX: %s" % (self.path)
 
 #-----------------------------------------------------------------------------
 # vim:ft=python:foldmethod=marker

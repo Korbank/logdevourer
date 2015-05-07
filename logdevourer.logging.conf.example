@@ -1,0 +1,38 @@
+version: 1
+root:
+  #level: ~ # optional; DEBUG, INFO, WARNING, ERROR, CRITICAL, NOTSET
+  level: NOTSET
+  #propagate: true  # optional; ignored for root logger
+  #filters: [...]   # optional
+  #handlers: [console, file]
+  handlers: [syslog]
+formatters:
+  syslog_formatter:
+    format: 'logdevd[%(process)d]: [%(name)s] %(message)s'
+  brief_formatter:
+    format: '%(levelname)-8s %(message)s'
+  precise_formatter:
+    format: '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: brief_formatter
+    #level:    CRITICAL
+    #filters: [...]
+    stream:   ext://sys.stdout
+  #file:
+  #  class: logging.handlers.RotatingFileHandler
+  #  formatter: precise_formatter
+  #  level:    INFO
+  #  filename: log/output.log
+  #  #maxBytes: 1024
+  #  #backupCount: 3
+  syslog:
+    class: logging.handlers.SysLogHandler
+    formatter: syslog_formatter
+    # path for syslog socket under Linux
+    address: /dev/log
+    facility: syslog
+
+# vim:ft=yaml
