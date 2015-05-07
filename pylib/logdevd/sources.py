@@ -190,7 +190,7 @@ class FileSource(Source):
             try:
                 stat = os.stat(path)
             except (IOError, OSError):
-                return (None, None)
+                return (None, None, None)
         elif fh is not None:
             stat = os.fstat(fh.fileno())
         return (stat.st_dev, stat.st_ino, stat.st_size)
