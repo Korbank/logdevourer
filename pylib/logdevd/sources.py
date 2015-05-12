@@ -20,6 +20,12 @@ class Source(object):
     def flush(self):
         pass
 
+    def poll_makes_sense(self):
+        return True
+
+    def is_opened(self):
+        return (self.fileno() is not None)
+
     def fileno(self):
         raise NotImplementedError()
 
@@ -123,6 +129,9 @@ class FileSource(Source):
 
     def flush(self):
         self._write_position()
+
+    def poll_makes_sense(self):
+        return False
 
     def fileno(self):
         if self.fh is None:
