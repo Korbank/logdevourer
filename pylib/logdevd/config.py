@@ -28,7 +28,7 @@ def load(config_file, state_dir):
 
     cf_destinations = []
     for dest in configuration["destinations"]:
-        if dest in ["stdout", "STDOUT"]:
+        if dest in ["stdout", "STDOUT"] or dest["proto"] == "stdout":
             new_dest = destinations.STDOUTDestination()
         elif dest["proto"] == "tcp":
             new_dest = destinations.TCPDestination(dest["host"], int(dest["port"]))
