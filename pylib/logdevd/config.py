@@ -3,6 +3,8 @@
 import yaml
 import liblognorm
 
+import sys
+
 import sources
 import destinations
 
@@ -22,6 +24,9 @@ def load(config_file, state_dir):
         elif src["proto"] == "unix":
             # XXX: no state directory needed
             new_source = sources.UNIXSource(src["path"])
+        elif src["proto"] == "stdin":
+            # XXX: no state directory needed
+            new_source = sources.FileHandleSource(sys.stdin)
         else:
             raise ValueError("unrecognized source: %s" % (str(src)))
         cf_sources.append(new_source)

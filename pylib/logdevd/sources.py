@@ -4,6 +4,7 @@ import socket
 import errno
 import os
 import sha
+import fcntl
 
 #-----------------------------------------------------------------------------
 
@@ -31,6 +32,54 @@ class Source(object):
 
     def try_readlines(self):
         raise NotImplementedError()
+
+#-----------------------------------------------------------------------------
+
+class FileHandleSource(object):
+    def __init__(self, fh = None):
+        self.fh = fh
+        self.read_buffer = []
+
+    def open(self):
+        fd = self.fh.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    def reopen(self):
+        pass
+
+    def reopen_necessary(self):
+        return False
+
+    def flush(self):
+        pass
+
+    def fileno(self):
+        return self.fh.fileno()
+
+    def try_readlines(self):
+        if self.fh is None:
+            return
+
+        try:
+            while True:
+                read = self.fh.read(1024)
+                if read == "": # EOF
+                    break # FIXME: what with `self.read_buffer'?
+                if "\n" in read:
+                    read = "".join(self.read_buffer) + read
+                    del self.read_buffer[:]
+
+                    lines = read.split("\n")
+                    if lines[-1] != "":
+                        self.read_buffer.append(lines[-1])
+                    for line in lines[:-1]:
+                        yield line
+        except IOError, e:
+            if e.errno == errno.EWOULDBLOCK or e.errno == errno.EAGAIN:
+                pass # OK, just no more data to read at the moment
+            else:
+                raise
 
 #-----------------------------------------------------------------------------
 
