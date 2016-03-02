@@ -80,7 +80,7 @@ class Poll:
             if e.args[0] == errno.EINTR: # in case some signal arrives
                 return []
             else: # other error, rethrow
-                raise e
+                raise
 
     def count(self):
         '''

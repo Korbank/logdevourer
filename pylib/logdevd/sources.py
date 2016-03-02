@@ -79,7 +79,7 @@ class FileHandleSource(object):
             if e.errno == errno.EWOULDBLOCK or e.errno == errno.EAGAIN:
                 pass # OK, just no more data to read at the moment
             else:
-                raise
+                raise # other error, rethrow
 
 #-----------------------------------------------------------------------------
 
@@ -290,10 +290,11 @@ class UDPSource(Source):
                 msg = self.socket.recv(4096, socket.MSG_DONTWAIT)
                 yield msg.rstrip("\n")
         except socket.error, e:
-            if e.errno == errno.EWOULDBLOCK:
+            if e.errno == errno.EWOULDBLOCK or e.errno == errno.EAGAIN:
                 # this is expected when there's nothing in the socket queue
                 return
-            raise e
+            else:
+                raise # other error, rethrow
 
     def __str__(self):
         if self.host == "":
@@ -334,10 +335,11 @@ class UNIXSource(Source):
                 msg = self.socket.recv(4096, socket.MSG_DONTWAIT)
                 yield msg.rstrip("\n")
         except socket.error, e:
-            if e.errno == errno.EWOULDBLOCK:
+            if e.errno == errno.EWOULDBLOCK or e.errno == errno.EAGAIN:
                 # this is expected when there's nothing in the socket queue
                 return
-            raise e
+            else:
+                raise # other error, rethrow
 
     def __str__(self):
         return "UNIX: %s" % (self.path)
