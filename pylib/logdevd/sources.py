@@ -38,24 +38,34 @@ class Source(object):
 class FileHandleSource(object):
     def __init__(self, fh = None):
         self.fh = fh
+        self.need_reopen = False
         self.read_buffer = []
 
     def open(self):
+        if self.fh is None:
+            return
         fd = self.fh.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     def reopen(self):
-        pass
+        if self.fh is None:
+            return
+        self.fh.close()
+        self.fh = None
+        self.need_reopen = False
 
     def reopen_necessary(self):
-        return False
+        return self.need_reopen
 
     def flush(self):
         pass
 
     def fileno(self):
-        return self.fh.fileno()
+        if self.fh is not None:
+            return self.fh.fileno()
+        else:
+            return None
 
     def try_readlines(self):
         if self.fh is None:
@@ -65,6 +75,7 @@ class FileHandleSource(object):
             while True:
                 read = self.fh.read(1024)
                 if read == "": # EOF
+                    self.need_reopen = True
                     break # FIXME: what with `self.read_buffer'?
                 if "\n" in read:
                     read = "".join(self.read_buffer) + read

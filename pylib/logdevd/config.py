@@ -10,6 +10,11 @@ import destinations
 
 #-----------------------------------------------------------------------------
 
+def stdio():
+    stdin = sources.FileHandleSource(sys.stdin)
+    stdout = destinations.STDOUTDestination()
+    return (stdin, stdout)
+
 def load(config_file, state_dir):
     with open(config_file) as cf:
         configuration = yaml.safe_load(cf)

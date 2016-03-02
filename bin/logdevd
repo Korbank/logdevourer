@@ -35,6 +35,13 @@ parser.add_option(
     help = "PID file for going daemon", metavar = "FILE",
 )
 parser.add_option(
+    "-i", "--stdio", dest = "stdio_only",
+    action = "store_true", default = False,
+    help = "read from STDIN, write to STDOUT, ignoring any sources and"
+           " destinations from configuration file"
+           " (--state-dir is also not used)",
+)
+parser.add_option(
     "-d", "--daemon", dest = "daemonize",
     action = "store_true", default = False,
     help = "detach from terminal (run as a daemon)",
@@ -91,8 +98,9 @@ dictConfig(logging_config)
 # main loop, along with state variables and options {{{
 
 class Daemon:
-    def __init__(self, config, state_dir):
+    def __init__(self, config, state_dir, stdio_only = False):
         self.config = config
+        self.stdio_only = stdio_only
         self.log_unparsed = False
         self.send_unparsed = True
         self.state_dir = state_dir
@@ -132,13 +140,22 @@ class Daemon:
         # TODO: try-catch
         logger.info("loading config file %s", self.config)
         cfg = logdevd.config.load(self.config, self.state_dir)
-        # TODO: convergence
-        (self.sources, self.destinations, self.lognorm, config) = cfg
-        for source in self.sources:
-            if not source.is_opened():
-                continue
-            logger.info("added source %s", source)
-            self.monitor_source(source)
+        if self.stdio_only:
+            # retain `self.sources' for read buffer on STDIN
+            # retain `self.destinations' for the sake of uniformity
+            (_sources, _destinations, self.lognorm, config) = cfg
+            if len(self.sources) == 0 and len(self.destinations) == 0:
+                (stdin, stdout) = logdevd.config.stdio()
+                self.sources.append(stdin)
+                self.destinations.append(stdout)
+        else:
+            # TODO: convergence
+            (self.sources, self.destinations, self.lognorm, config) = cfg
+            for source in self.sources:
+                if not source.is_opened():
+                    continue
+                logger.info("added source %s", source)
+                self.monitor_source(source)
         self.send_unparsed = config["options"].get("send_unparsed", True)
         self.log_unparsed  = config["options"].get("log_unparsed", False)
 
@@ -188,6 +205,9 @@ class Daemon:
         for d in self.destinations:
             d.send(line)
 
+    def filecount(self):
+        return self.poll_h.count()
+
     def poll(self, timeout):
         return self.poll_h.poll(timeout)
 
@@ -208,7 +228,7 @@ class Daemon:
 logger = logging.getLogger()
 
 logger.info("preparing daemon's state")
-daemon = Daemon(options.config, options.state_dir)
+daemon = Daemon(options.config, options.state_dir, options.stdio_only)
 
 signal.signal(signal.SIGHUP, daemon.sighandler)
 signal.signal(signal.SIGINT, daemon.sighandler)
@@ -237,7 +257,7 @@ pid_file.claim()
 #-----------------------------------------------------------------------------
 
 logger.info("entering read-parse-send loop")
-while True:
+while daemon.filecount() > 0:
     # check every 250ms for sources that need reopening
     canread = daemon.poll(250)
     for source in canread + daemon.unpollable_opened_sources:
