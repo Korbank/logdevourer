@@ -139,23 +139,14 @@ class Daemon:
         self.poll_h = logdevd.poll.Poll()
         # TODO: try-catch
         logger.info("loading config file %s", self.config)
-        cfg = logdevd.config.load(self.config, self.state_dir)
-        if self.stdio_only:
-            # retain `self.sources' for read buffer on STDIN
-            # retain `self.destinations' for the sake of uniformity
-            (_sources, _destinations, self.lognorm, config) = cfg
-            if len(self.sources) == 0 and len(self.destinations) == 0:
-                (stdin, stdout) = logdevd.config.stdio()
-                self.sources.append(stdin)
-                self.destinations.append(stdout)
-        else:
-            # TODO: convergence
-            (self.sources, self.destinations, self.lognorm, config) = cfg
-            for source in self.sources:
-                if not source.is_opened():
-                    continue
-                logger.info("added source %s", source)
-                self.monitor_source(source)
+        cfg = logdevd.config.load(self.config, self.state_dir, self.stdio_only)
+        # TODO: convergence
+        (self.sources, self.destinations, self.lognorm, config) = cfg
+        for source in self.sources:
+            if not source.is_opened():
+                continue
+            logger.info("added source %s", source)
+            self.monitor_source(source)
         self.send_unparsed = config["options"].get("send_unparsed", True)
         self.log_unparsed  = config["options"].get("log_unparsed", False)
 
