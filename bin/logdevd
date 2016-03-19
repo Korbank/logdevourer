@@ -64,6 +64,17 @@ parser.add_option(
 if options.logging_config is not None:
     with open(options.logging_config) as cf:
         logging_config = yaml.safe_load(cf)
+elif options.stdio_only:
+    logging_config = {
+        "version": 1,
+        "root": {
+            "level": "NOTSET",
+            "handlers": ["sink"],
+        },
+        "handlers": {
+            "sink": { "class": "logdevd.logging_handlers.NullHandler" },
+        },
+    }
 else:
     logging_config = {
         "version": 1,
@@ -73,15 +84,15 @@ else:
         },
         "formatters": {
             "syslog_formatter": {
-                "format": "logdevd[%(process)d]: [%(name)s] %(message)s",
+                "format": "[%(name)s] %(message)s",
             },
         },
         "handlers": {
             "syslog": {
-                "class": "logging.handlers.SysLogHandler",
+                "class": "logdevd.logging_handlers.SysLogHandler",
                 "formatter": "syslog_formatter",
-                "address": "/dev/log",
                 "facility": "syslog",
+                "process_name": "logdevd",
             },
         },
     }
