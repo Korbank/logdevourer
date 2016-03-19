@@ -12,6 +12,9 @@ class Source(object):
     def open(self):
         raise NotImplementedError()
 
+    def close(self):
+        raise NotImplementedError()
+
     def reopen(self):
         raise NotImplementedError()
 
@@ -151,9 +154,14 @@ class FileSource(Source):
         position_filename = os.path.join(self.state_dir, position_filename)
         self.position_file = FileSource.PositionFile(position_filename)
 
-    def __del__(self):
+    def close(self):
         if self.fh is not None:
             self._write_position()
+            self.fh.close()
+            self.fh = None
+
+    def __del__(self):
+        self.close()
 
     def open(self):
         try:
@@ -285,9 +293,13 @@ class UDPSource(Source):
         except (IOError, OSError):
             pass
 
-    def __del__(self):
+    def close(self):
         if self.socket is not None:
             self.socket.close()
+            self.socket = None
+
+    def __del__(self):
+        self.close()
 
     def fileno(self):
         if self.socket is None:
@@ -321,17 +333,22 @@ class UNIXSource(Source):
         self.path = path
         self.socket = None
 
-    def __del__(self):
+    def close(self):
         if self.socket is not None:
             self.socket.close()
+            self.socket = None
             os.unlink(self.path)
+
+    def __del__(self):
+        self.close()
 
     def open(self):
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.bind(self.path)
             self.socket = sock
-        except (IOError, OSError):
+        except (IOError, OSError), e:
+            print str(e)
             pass
 
     def fileno(self):

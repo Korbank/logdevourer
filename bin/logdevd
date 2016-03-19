@@ -146,6 +146,7 @@ class Daemon:
             logger.info("flushing buffers in all sources")
         for source in self.sources:
             source.flush()
+            source.close()
         del self.unpollable_opened_sources[:]
         self.poll_h = logdevd.poll.Poll()
         # TODO: try-catch
