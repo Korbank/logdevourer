@@ -35,18 +35,14 @@ class Source(object):
 
 #-----------------------------------------------------------------------------
 
-class FileHandleSource(object):
+class FileHandleSource(Source):
     def __init__(self, fh = None):
         self.fh = fh
+        self.fd = self.fh.fileno()
+        flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
+        fcntl.fcntl(self.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         self.need_reopen = False
         self.read_buffer = []
-
-    def open(self):
-        if self.fh is None:
-            return
-        fd = self.fh.fileno()
-        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     def reopen(self):
         if self.fh is None:
@@ -63,7 +59,7 @@ class FileHandleSource(object):
 
     def fileno(self):
         if self.fh is not None:
-            return self.fh.fileno()
+            return self.fd
         else:
             return None
 
@@ -91,6 +87,9 @@ class FileHandleSource(object):
                 pass # OK, just no more data to read at the moment
             else:
                 raise # other error, rethrow
+
+    def __str__(self):
+        return "filehandle: %d" % (self.fd)
 
 #-----------------------------------------------------------------------------
 

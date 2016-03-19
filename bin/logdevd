@@ -144,6 +144,8 @@ class Daemon:
         (self.sources, self.destinations, self.lognorm, config) = cfg
         for source in self.sources:
             if not source.is_opened():
+                source.open()
+            if not source.is_opened():
                 continue
             logger.info("added source %s", source)
             self.monitor_source(source)
@@ -248,7 +250,7 @@ pid_file.claim()
 #-----------------------------------------------------------------------------
 
 logger.info("entering read-parse-send loop")
-while daemon.filecount() > 0:
+while daemon.filecount() > 0 or not options.stdio_only:
     # check every 250ms for sources that need reopening
     canread = daemon.poll(250)
     for source in canread + daemon.unpollable_opened_sources:
