@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-.PHONY: all build clean
+.PHONY: all build install clean
 
 all: build
 
