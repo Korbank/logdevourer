@@ -190,13 +190,18 @@ class Daemon:
 
     def normalize(self, log_line):
         result = self.lognorm.normalize(log_line)
-        # XXX: "*" field is expected to be JSON string, since liblognorm 1.1.1
-        # doesn't have "json" field type yet
+        # XXX: "*" field can be either a string containing JSON hash or
+        # an already parsed dictionary; this is to support liblognorm both
+        # 1.1.1 and later versions, with "json" field type being introduced in
+        # 1.1.2
         if "*" in result:
             json_field = result.pop("*")
             old_result = result
             try:
-                result = json.loads(json_field)
+                if isinstance(json_field, dict):
+                    result = json_field
+                else: # should be string
+                    result = json.loads(json_field)
                 result.update(old_result)
             except:
                 result = {
