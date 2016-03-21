@@ -1,0 +1,428 @@
+=pod
+
+=head1 NAME
+
+I<logdevourer> - log parsing daemon
+
+=head1 SYNOPSIS
+
+B<logdevd> [ B<--daemon> ] [ B<--config>=I<config-file> ]
+[ B<--state-dir>=I<state-dir> ]
+[ B<--pid-file>=I<pidfile> ]
+S<< I<options> ... >>
+
+B<logdevd> B<--stdio> [ B<--config>=I<config-file> ]
+
+=head1 DESCRIPTION
+
+I<logdevourer> is a daemon that follows specified set of log files and log
+sockets (L<tcp(7)>, L<udp(7)>, or L<unix(7)>), parses incoming entries into
+JSON-compatible structure, and sends them to the configured outputs (typically
+a locally running spooler, like Fluentd or L<messenger(8)> from Seismometer
+Toolbox).
+
+Considering L<rsyslogd(8)> alone, I<logdevourer> could be seen as excessive
+daemon, as L<rsyslogd(8)> already can work with I<liblognorm>. On the other
+hand, I<logdevourer> can also read logs produced outside syslog, and parsed
+logs can be sent through the same channel as monitoring data, which allows
+to derive additional metrics based on logs. I<logdevourer> has also simpler
+output protocol and configuration, so it can be easily incorporated into
+bigger infrastructure.
+
+=head1 OPTIONS
+
+=over
+
+=item B<-c> I<config-file>, B<--config>=I<config-file>
+
+configuration file, which specifies log sources, log destinations, path to
+rules base, and other options (default: F</etc/logdevourer/logdevourer.conf>)
+
+=item B<-l> I<logging-config>, B<--logging>=I<logging-config>
+
+YAML-encoded logging configuration dictionary for Python; see
+L<https://docs.python.org/2/howto/logging.html> and
+C<logging.config.dictConfig()> Python function documentation for details
+
+B<NOTE>: on Python 2.6 I<logdevourer> uses backported C<dictConfig()>, so it
+works the same as on Python 2.7
+
+=item B<-i>, B<--stdio>
+
+ignore sources and destinations configuration, reading logs from I<STDIN> and
+writing parse results to I<STDOUT> instead (this mode is mainly useful for
+developing parsing rules); logging is disabled in this mode, unless
+B<--logging> option was provided
+
+=item B<-d>, B<--daemon>
+
+run in background, detaching from terminal
+
+=item B<-s> I<state-dir>, B<--state-dir>=I<state-dir>
+
+state directory, used to save positions for log files (default:
+F</var/lib/logdevourer/>)
+
+=item B<-p> I<pidfile>, B<--pid-file>=I<pidfile>
+
+file to write PID to (mainly useful for C<--daemon> option)
+
+=item B<-u> I<user>, B<--user>=I<user>, B<-g> I<group>, B<--group>=I<group>
+
+change UID and GID to these (default: no UID/GID change)
+
+=back
+
+=head1 CONFIGURATION
+
+Configuration file is a YAML with three sections, C<sources> list,
+C<destinations> list, and C<options> hash.
+
+An example config could look like this:
+
+  sources:
+    - /var/log/auth.log
+    - /var/log/daemon.log
+    - /var/log/kern.log
+    - /var/log/messages
+    - /var/log/syslog
+    - /var/log/user.log
+    - {proto: udp, host: localhost, port: 9830}
+    - {proto: unix, path: /var/run/logdevourer.sock}
+
+  destinations:
+    - {proto: unix, path: /var/run/messenger.sock, retry: true}
+
+  options:
+    rulebase: /etc/logdevourer/syslog.rules
+    send_unparsed: true
+    log_unparsed: false
+
+=head2 Log Sources
+
+Log source can be a string, meaning it's a path to a log file (typically
+a syslog file, but it could be Apache's or nginx' log, for example). This file
+is then followed in a similar manner to how S<< C<tail -f ...> >> works.
+I<logdevourer> recognizes when the file was truncated, removed, or replaced
+with a fresh file (like L<logrotate(8)> with different mixes of
+I<copytruncate> and I<create> options works). If the log file doesn't exist at
+the start time, I<logdevourer> will start watching it as soon as it becomes
+available.
+
+Log source can also be a hash with one of the following structures:
+
+=over
+
+=item C<< {"proto": "stdin"} >>
+
+read logs from I<STDIN>
+
+=item C<< {"proto": "unix", "path": I<socket path>} >>
+
+receive logs on a datagram unix socket, one log entry per message (message may
+end with newline character, but doesn't need to)
+
+=item C<< {"proto": "tcp", "port": I<integer>} >>
+
+=item C<< {"proto": "tcp", "host": I<bind address>, "port": I<integer>} >>
+
+receive logs on a TCP socket (I<bind address> may be a DNS name or IP
+address)
+
+=item C<< {"proto": "udp", "port": I<integer>} >>
+
+=item C<< {"proto": "udp", "host": I<bind address>, "port": I<integer>} >>
+
+receive logs on an UDP socket (I<bind address> may be a DNS name or IP
+address)
+
+=back
+
+=head2 Log Destinations
+
+Since I<logdevourer>'s main purpose is to follow log files, its network output
+is not a sophisticated one. If some sort of data spooling and/or retransmition
+is required (and pretty much always is), some other daemon running along with
+I<logdevourer> is necessary.
+
+This other daemon's location can be pointed in following ways:
+
+=over
+
+=item C<< "stdout" >> or C<< {"proto": "stdout"} >>
+
+write parse results to I<STDOUT>
+
+=item C<< {"proto": "unix", "path": I<socket path>} >>
+
+=item C<< {"proto": "unix", "path": I<socket path>, "retry": true} >>
+
+=item C<< {"proto": "unix", "path": I<socket path>, "retry": false} >>
+
+send parse results to datagram unix socket; first two forms cause
+I<logdevourer> to hold whole parsing in case of a send error (e.g. the
+process on the receiving end of the socket was restarted), while the last form
+causes the messages to be simply dropped
+
+=item C<< {"proto": "tcp", "host": I<address>, "port": I<address>} >>
+
+send parse results to TCP socket, holding the whole parsing in case of network
+problems
+
+=item C<< {"proto": "udp", "host": I<address>, "port": I<address>} >>
+
+send parse results to UDP socket, ignoring any network errors
+
+=back
+
+I<STDOUT> and I<TCP> outputs write JSON objects, one per line. I<UDP> and
+I<unix> outputs send a JSON object per message, and messages B<do not end>
+with a newline character.
+
+=head2 Options
+
+=over
+
+=item C<< rulebase >> (path)
+
+path to the I<liblognorm> rules file; see L</RULES PRIMER>
+
+=item C<< send_unparsed >> (boolean, default C<true>)
+
+whether to send or suppress messages in case of parse failure (i.e.
+unrecognized message format); see L</OUTPUT FORMAT>
+
+=item C<< log_unparsed >> (boolean, default C<false>)
+
+whether to log parse failures
+
+=back
+
+=head1 OUTPUT FORMAT
+
+There are two kinds of output messages. One is when parsing succeeds, and all
+the log fields are gathered in a message. Such message looks like:
+
+  {"event.tags": ["tag1", "tag2", ...],
+    "date": "Mar 18 14:17:33", "host": "onyx", ...}
+
+C<"event.tags"> is a special key that carries list of tags the rule has
+specified. The key is missing if the rule has no tags. The rest of the keys
+are the named matches from the matching rule.
+
+If no rule matched, a message with two keys, C<"originalmsg"> and
+C<"unparsed-data">, is generated. C<"originalmsg"> contains the whole log
+entry, and C<"unparsed-data"> contains only the part that I<liblognorm>
+couldn't parse. Example message looks like this:
+
+  {"originalmsg": "Mar 18 14:17:33 onyx daemon[7721]: some event",
+    "unparsed-data": "some event"}
+
+Of course messages of this type are suppressed when C<"send_unparsed"> in
+configuration is set to C<false>.
+
+=head1 RULES PRIMER
+
+This guide is by no means exhaustive. It's just to provide most of the
+information related to I<logdevourer> in one place. For full syntax
+description and complete list of available fields see I<liblognorm>'s
+manual.
+
+=head2 Syntax
+
+A rule line starts with C<"rule=">, followed by (possibly empty) list of tags,
+separated from the rule itself with a colon C<":">.
+
+  # comments start with a hash sign
+  rule=tag1, tag2, ...:literal text
+  rule=:literal text, no tags
+
+Note the leading colon in the second rule.
+
+If necessary, characters can be specified in C<"\x##"> form, C<"##"> being
+a two-digit hexadecimal character code. Useful values are:
+
+=over
+
+=item C<"\x3a"> == C<":">
+
+=item C<"\x25"> == C<"%">
+
+=item C<"\x20"> == C<" ">
+
+=item C<"\x2c"> == C<",">
+
+=back
+
+A literal percent sign C<"%"> can also be encoded as C<"%%"> where it makes
+sense.
+
+Variable parts of the message are denoted with C<"%field_name:format%"> or
+C<"%field_name:format:args%"> placeholders. Several possible formats can be
+found in L</Field Types> section, with full list in I<liblognorm>'s manual.
+
+  prefix=%date:date-rfc3164% %host:word%\x20
+  # ...
+  rule=dhcp_discover:dhcpd: DHCPDISCOVER from %mac:word% via %iface:word%
+  rule=dhcp_discover:dhcpd: DHCPDISCOVER from %mac:word% via %iface:char-to:\x3a%: %message:rest%
+
+If the format is important, but the actual value is to be ignored, field name
+can be set to C<"-">.
+
+  prefix=%date:date-rfc3164% %host:word%\x20
+  # ...
+  rule=:dhcpd: %-:number% bad udp checksums in %-:number% packets
+
+A field named C<"*"> is special: it means that the field is a JSON hash, and
+the resulting message should be populated with its content (fields defined in
+the parsing rule have the precedence).
+
+B<NOTE>: This behaviour has nothing to do with I<liblognorm>, it's specific to
+I<logdevourer>.
+
+  prefix=%date:date-rfc3164% %host:word%\x20
+  # ...
+  rule=:harpd[%pid:number%]: %*:json%
+  # or alternatively:
+  rule=:harpd[%pid:number%]: %*:rest%
+
+These two rules have a subtle difference. The first rule causes JSON to be
+deserialized by I<liblognorm> (JSON field type is supported since 1.1.2),
+while in the second one it's I<logdevourer>'s job. The latter of course works
+with I<liblognorm> 1.1.1.
+
+If many rules share a common prefix, like syslog messages, it's useful to
+define it in advance. Prefix applies to the rules that follow it, until it is
+changed. Default value is empty string (C<"">).
+
+The format is similar as for C<rule=...> lines, except for the tags part.
+
+  # traditional syslog format
+  prefix=%date:date-rfc3164% %host:word%\x20
+
+Note the trailing space (encoded for visibility as C<"\x20">). It needs to go
+either to the prefix or to each of the rules.
+
+Messages that are results of parsing can be annotated. Such annotations only
+apply to the messages with specific tag, and can add static text to the
+message. A tag can have multiple annotations.
+
+  annotate=dhcp_discover:+program="dhcpd"
+  annotate=dhcp_discover:+event="DISCOVER"
+
+=head2 Field Types
+
+=over
+
+=item C<< %field:number% >>
+
+decimal number (a sequence of digits), returned as the original string
+
+=item C<< %field:float% >>
+
+floating point number, returned as the original string
+
+=item C<< %field:whitespace% >> (new in I<liblognorm> 1.1.2)
+
+one or more whitespace characters
+
+=item C<< %field:word% >>
+
+one or more non-whitespace characters, until the next whitespace or end of
+line
+
+=item C<< %field:string-to:SEPARATOR% >>
+
+one or more characters, up to C<SEPARATOR> string
+
+=item C<< %field:alpha% >>
+
+one or more characters from C</[a-zA-Z]/> set
+
+=item C<< %field:char-to:C% >>
+
+one or more characters, up to C<C> character
+
+=item C<< %field:rest% >>
+
+any remaining string
+
+=item C<< %field:date-rfc3164% >>
+
+date in C<< %b %e %H:%M:%S >> format (with slightly different formats allowed)
+
+=item C<< %field:date-rfc5424% >>
+
+date in C<< %Y-%m-%dT%H:%M:%S.%2N%:z >> format (with slightly different
+formats allowed)
+
+=item C<< %field:ipv4% >>
+
+IPv4 address, in dot-decimal notation (e.g. C<127.0.0.1>)
+
+=item C<< %field:ipv6% >> (new in I<liblognorm> 1.1.2)
+
+IPv6 address, in RFC 4291 format, followed either by end of string or
+a whitespace
+
+=item C<< %field:mac48% >> (new in I<liblognorm> 1.1.2)
+
+IEEE 802 MAC address, with digit pairs separated by either colons (C<":">) or
+hyphens (C<"-">) (e.g. C<00:00:00:00:00:00> or C<FF-FF-FF-FF-FF-FF-FF>)
+
+=item C<< %field:regex:RE% >>
+
+Perl-compatible regexp (see L<pcre(3)> for syntax); B<NOTE>: only when
+I<liblognorm> was compiled with PCRE support, which is not the default build
+option
+
+=item C<< %field:json% >> (new in I<liblognorm> 1.1.2)
+
+JSON hash object, including any whitespace that follows it
+
+=back
+
+=head1 SIGNALS
+
+=over
+
+=item I<SIGTERM>, I<SIGINT>
+
+Terminate daemon.
+
+=item I<SIGHUP>
+
+Reload configuration, list of sources and destinations, and I<liblognorm>
+rules.
+
+=back
+
+=head1 FILES
+
+=over
+
+=item F</etc/logdevourer/logdevourer.conf> - configuration file
+
+=item F</etc/logdevourer/syslog.rules.example> - example of I<liblognorm> rules
+
+=item F</var/lib/logdevourer/> - state directory
+
+=item F</var/run/logdevourer.pid> - pidfile
+
+=back
+
+=head1 TODO
+
+Some backpressure mechanism, for destination daemon to signal network
+problems. This would limit necessary message spooling.
+
+=head1 SEE ALSO
+
+L<liblognorm home page|http://www.liblognorm.com/> and
+L<documentation|http://www.liblognorm.com/files/manual/configuration.html>
+
+L<Seismometer Toolbox|http://seismometer.net/toolbox/> (L<messenger(8)>)
+
+L<Fluentd|http://www.fluentd.org/>
+
+=cut

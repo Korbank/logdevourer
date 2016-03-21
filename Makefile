@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-.PHONY: all build install clean
+.PHONY: all man build install clean
 
 all: build
 
@@ -9,6 +9,11 @@ build:
 
 install:
 	python setup.py $@ $(if $(DESTDIR),--root=$(DESTDIR))
+
+man: man/logdevd.8
+
+man/logdevd.8: man/logdevd.pod
+	pod2man --section=8 --center="Linux System Administration" --release="" $< $@
 
 clean:
 	python setup.py $@ --all
