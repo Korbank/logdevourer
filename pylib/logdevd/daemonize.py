@@ -13,6 +13,9 @@ import os
 import sys
 import pwd
 import grp
+import time
+import traceback
+import tempfile
 
 #-----------------------------------------------------------------------------
 
@@ -142,6 +145,8 @@ def child_process():
     **NOTE**: This is not the place to acknowledge success. There are other
     operations, like creating listening sockets. See :func:`detach_succeeded`.
     '''
+    # set uncaught exception handler
+    sys.excepthook = exception_logger
     # replace STDIN, STDOUT and STDERR
     new_stdin_fd = os.open('/dev/null', os.O_RDONLY)
     new_stdout_fd = os.open('/dev/null', os.O_WRONLY)
@@ -162,6 +167,27 @@ def parent_process():
 
 # }}}
 #-----------------------------------------------------------------------------
+
+def exception_logger(exctype, value, tb):
+    '''
+    Uncaught exception handler that writes a traceback to
+    :envvar:`$PYTHON_TRACEBACK_DIR` or :envvar:`$TMPDIR` (or :file:`/tmp` if
+    neither is set).
+
+    Function suitable to be assigned to :obj:`sys.excepthook`.
+    '''
+    dump_dir = os.environ.get("PYTHON_TRACEBACK_DIR")
+    if dump_dir is None:
+        dump_dir = os.environ.get("TMPDIR", "/tmp")
+    (fd, dump_file) = tempfile.mkstemp(
+        prefix = "traceback.%d." % (os.getpid(),), suffix = "",
+        dir = dump_dir, text = True,
+    )
+
+    os.write(fd, "### @%d PID=%d\n" % (time.time(), os.getpid()))
+    for line in traceback.format_exception(exctype, value, tb):
+        os.write(fd, line)
+    os.close(fd)
 
 #-----------------------------------------------------------------------------
 # vim:ft=python:foldmethod=marker
