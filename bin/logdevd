@@ -214,6 +214,7 @@ class Daemon:
         # remains after parsing the log line
         if "originalmsg" in result and "unparsed-data" in result:
             if self.log_unparsed:
+                logger = logging.getLogger("normalize")
                 logger.info("unparsed log entry: %s", self.encode_json(result))
             if not self.send_unparsed:
                 return None
