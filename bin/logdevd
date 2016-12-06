@@ -125,6 +125,9 @@ class Daemon:
         # TODO: raise exception on error (no previous config to fall back to)
         self.reload()
 
+    def encode_json(self, struct):
+        return json.dumps(struct, sort_keys = True)
+
     def monitor_source(self, source):
         if source.poll_makes_sense():
             self.poll_h.add(source)
@@ -211,13 +214,13 @@ class Daemon:
         # remains after parsing the log line
         if "originalmsg" in result and "unparsed-data" in result:
             if self.log_unparsed:
-                logger.info("unparsed log entry: %s", json.dumps(result))
+                logger.info("unparsed log entry: %s", self.encode_json(result))
             if not self.send_unparsed:
                 return None
         return result
 
     def fan_out(self, message):
-        line = json.dumps(message, sort_keys = True)
+        line = self.encode_json(message)
         for d in self.destinations:
             d.send(line)
 
