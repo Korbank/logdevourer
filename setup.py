@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "logdevourer",
-    version = "0.2.1",
+    version = "0.2.2",
     description = "Log parser and normalizer",
     scripts      = [ "bin/logdevd" ],
     packages     = [ "logdevd" ],
