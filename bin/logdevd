@@ -201,7 +201,8 @@ class Daemon:
                     logger.info("closed source %s", source)
 
     def normalize(self, log_line):
-        result = self.lognorm.normalize(Daemon.sanitize(log_line))
+        log_line = Daemon.sanitize(log_line)
+        result = self.lognorm.normalize(log_line)
         # XXX: "*" field can be either a string containing JSON hash or
         # an already parsed dictionary; this is to support liblognorm both
         # 1.1.1 and later versions, with "json" field type being introduced in
