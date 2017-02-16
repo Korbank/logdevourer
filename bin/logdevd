@@ -123,6 +123,7 @@ class Daemon:
         self.stdio_only = stdio_only
         self.log_unparsed = False
         self.send_unparsed = True
+        self.keep_original = False
         self.state_dir = state_dir
         self.poll_h = None
         # special list for sources that are plain files, so they're not
@@ -175,6 +176,7 @@ class Daemon:
             self.monitor_source(source)
         self.send_unparsed = config["options"].get("send_unparsed", True)
         self.log_unparsed  = config["options"].get("log_unparsed", False)
+        self.keep_original = config["options"].get("keep_original", False)
 
     def reopen_sources_if_necessary(self):
         # XXX: when logging, remember that this method is called every 500ms,
@@ -228,6 +230,8 @@ class Daemon:
                 logger.info("unparsed log entry: %s", self.encode_json(result))
             if not self.send_unparsed:
                 return None
+        elif self.keep_original:
+            result["originalmsg"] = log_line
         return result
 
     def fan_out(self, message):

@@ -97,6 +97,7 @@ An example config could look like this:
     rulebase: /etc/logdevourer/syslog.rules
     send_unparsed: true
     log_unparsed: false
+    keep_original: false
 
 =head2 Log Sources
 
@@ -195,6 +196,12 @@ unrecognized message format); see L</OUTPUT FORMAT>
 =item C<< log_unparsed >> (boolean, default C<false>)
 
 whether to log parse failures
+
+=item C<< keep_original >> (boolean, default C<false>)
+
+if set to C<true>, I<logdevourer> will store the unparsed message under
+C<"originalmsg"> key along with all the other fields extracted from the
+message
 
 =back
 

@@ -11,6 +11,7 @@ destinations:
 
 options:
   rulebase: /etc/logdevourer/syslog.rules
+  keep_original: false
   send_unparsed: true
   log_unparsed: false
 

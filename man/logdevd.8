@@ -124,7 +124,7 @@
 .\" ========================================================================
 .\"
 .IX Title "LOGDEVD 8"
-.TH LOGDEVD 8 "2016-03-21" "" "Linux System Administration"
+.TH LOGDEVD 8 "2017-02-16" "" "Linux System Administration"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
@@ -212,6 +212,7 @@ An example config could look like this:
 \&    rulebase: /etc/logdevourer/syslog.rules
 \&    send_unparsed: true
 \&    log_unparsed: false
+\&    keep_original: false
 .Ve
 .SS "Log Sources"
 .IX Subsection "Log Sources"
@@ -309,6 +310,12 @@ unrecognized message format); see \*(L"\s-1OUTPUT\s0 \s-1FORMAT\s0\*(R"
 .el .IP "\f(CWlog_unparsed\fR (boolean, default \f(CWfalse\fR)" 4
 .IX Item "log_unparsed (boolean, default false)"
 whether to log parse failures
+.ie n .IP """keep_original"" (boolean, default ""false"")" 4
+.el .IP "\f(CWkeep_original\fR (boolean, default \f(CWfalse\fR)" 4
+.IX Item "keep_original (boolean, default false)"
+if set to \f(CW\*(C`true\*(C'\fR, \fIlogdevourer\fR will store the unparsed message under
+\&\f(CW"originalmsg"\fR key along with all the other fields extracted from the
+message
 .SH "OUTPUT FORMAT"
 .IX Header "OUTPUT FORMAT"
 There are two kinds of output messages. One is when parsing succeeds, and all
