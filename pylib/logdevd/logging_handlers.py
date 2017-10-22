@@ -45,7 +45,7 @@ class SysLogHandler(logging.Handler):
     _FACILITIES = dict([
         (n, getattr(syslog, "LOG_" + n.upper()))
         for n in [
-            "auth", "authpriv" "cron", "daemon", "ftp", "kern",
+            "auth", "authpriv", "cron", "daemon", "ftp", "kern",
             "local0", "local1", "local2", "local3",
             "local4", "local5", "local6", "local7",
             "lpr", "mail", "news", "syslog", "user", "uucp",
